@@ -123,14 +123,15 @@ h1 { margin: 6px 0 0; font-size: 28px; line-height: 1.08; font-weight: 800; lett
 .plate-chars {
   flex: 1; display: flex; align-items: center; justify-content: center;
   font-family: var(--plate-font); font-weight: 500;
-  font-size: calc(var(--ph) * .74);
+  font-size: calc(var(--ph) * .66);
   padding-right: calc(var(--ph) * .08);
 }
-.cell { display: inline-block; width: .5em; text-align: center; line-height: 1.15; }
-.cell.gap { margin-left: .22em; }
-.reel { height: 1.15em; overflow: hidden; position: relative; }
+/* Висота рядка 1.3em: великі літери будь-якого шрифту стоять по центру і не обрізаються */
+.cell { display: inline-block; width: .54em; text-align: center; line-height: 1.3em; height: 1.3em; }
+.cell.gap { margin-left: .24em; }
+.reel { height: 1.3em; overflow: hidden; position: relative; }
 .strip { display: flex; flex-direction: column; will-change: transform; }
-.strip span { height: 1.15em; line-height: 1.15em; display: block; }
+.strip span { height: 1.3em; line-height: 1.3em; display: block; }
 .reel.landed { animation: thunk .28s ease-out; }
 @keyframes thunk { 0% { transform: translateY(-4%); } 60% { transform: translateY(3%); } 100% { transform: none; } }
 .reel.blur .strip { filter: blur(1.2px); }

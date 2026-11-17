@@ -63,7 +63,7 @@
         void strip.offsetHeight;
         const dur = 0.9 + i * 0.16 + (suspense && i >= 6 ? 1.1 + (i - 6) * 0.9 : 0);
         strip.style.transition = `transform ${dur}s cubic-bezier(.12,.75,.2,1)`;
-        strip.style.transform = `translateY(-${(chars.length - 1) * 1.15}em)`;
+        strip.style.transform = `translateY(-${(chars.length - 1) * 1.3}em)`;
         reel.classList.remove('landed');
         reel.classList.add('blur');
         setTimeout(() => reel.classList.remove('blur'), dur * 650);
