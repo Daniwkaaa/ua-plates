@@ -320,6 +320,8 @@
     LETTERS, REGIONS, TIERS, TIER_BY_ID,
     spin, evaluate, fromKey, keyOf, normalizeLetter, percentile, similarBetter,
     regionName: (code) => REGIONS[code] || 'Україна',
-    formatPrice: (n) => n.toLocaleString('uk-UA').replace(/,/g, ' ') + ' ₴',
+    // Однаково працює і в браузері, і в боті на Cloudflare
+    formatPrice: (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' ₴',
+    formatPercent: (pct) => (pct >= 99 ? Math.min(pct, 99.99).toFixed(2).replace('.', ',') : String(Math.floor(pct))) + '%',
   };
-})(window);
+})(typeof window !== 'undefined' ? window : globalThis);

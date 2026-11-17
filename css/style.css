@@ -369,6 +369,26 @@ h1 { margin: 6px 0 0; font-size: 28px; line-height: 1.08; font-weight: 800; lett
   background: var(--surface-2); font-weight: 800;
 }
 
+/* ---------- Поділитися ---------- */
+.share-btn {
+  margin-top: 4px; padding: 11px 20px; border-radius: 14px;
+  font-weight: 800; font-size: 14px; color: #fff;
+  background: linear-gradient(135deg, #2f6bff, #1745c7);
+  box-shadow: 0 6px 20px rgba(47, 107, 255, .35);
+  transition: transform .15s;
+}
+.share-btn:active { transform: scale(.95); }
+.share-btn.wide { display: block; width: 100%; height: 50px; margin-top: 18px; border-radius: 16px; font-size: 15px; }
+.sheet-close { margin-top: 10px !important; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(100px + var(--safe-bottom)); z-index: 60;
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  padding: 12px 18px; border-radius: 14px; font-size: 14px; font-weight: 700;
+  background: rgba(16, 20, 34, .95); border: 1px solid var(--border);
+  transition: opacity .25s, transform .25s; max-width: calc(100% - 32px); text-align: center;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
 /* ---------- Мій номер ---------- */
 .check-stage { min-height: 0; padding-top: 0; }
 .check-stage .plate-wrap { margin-top: 6px; }

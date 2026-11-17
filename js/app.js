@@ -138,6 +138,7 @@
 
   function reveal(p) {
     const tier = p.tier;
+    lastMainPlate = p;
     document.documentElement.style.setProperty('--tier', tier.color);
     wrap.className = 'plate-wrap revealed t-' + tier.id;
     plateEl.classList.remove('shining'); void plateEl.offsetWidth; plateEl.classList.add('shining');
@@ -327,6 +328,7 @@
   const sheet = $('sheet'), backdrop = $('sheet-backdrop');
   function openSheet(key) {
     const p = cache(key);
+    sheetPlate = p;
     const mine = Store.entries.filter(e => e.key === key);
     const first = new Date(Math.min(...mine.map(e => e.t)) * 1000);
     sheet.style.setProperty('--tier', p.tier.color);
@@ -492,7 +494,8 @@
     const pct = Plates.percentile(p.price);
     $('check-pct').innerHTML = pct < 1
       ? 'Таких номерів найбільше, і це нормально 😉'
-      : `Кращий, ніж <b>${pct >= 99 ? Math.min(pct, 99.99).toFixed(2).replace('.', ',') : Math.floor(pct)}%</b> номерів в Україні`;
+      : `Кращий, ніж <b>${Plates.formatPercent(pct)}</b> номерів в Україні`;
+    lastCheckPlate = p;
 
     $('check-features').innerHTML = p.features.length
       ? p.features.map((f, i) => `<span class="chip" style="animation-delay:${0.35 + i * 0.08}s">${f.label}<b>+${f.pts}</b></span>`).join('')
@@ -525,6 +528,46 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
   updateCheck();
+
+  // ---------- Поділитися ----------
+  const BOT_USERNAME = 'Nomercraftbot';
+  const APP_LINK = `https://t.me/${BOT_USERNAME}?startapp`;
+  let lastMainPlate = null, lastCheckPlate = null, sheetPlate = null, toastTimer = null;
+
+  function toast(text) {
+    let el = document.querySelector('.toast');
+    if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); }
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+
+  function sharePlate(p) {
+    if (!p) return;
+    haptic.impact('light');
+    Sound.uiTick();
+    const pct = Plates.percentile(p.price);
+    const plate = fmtPlate(p);
+    // 1) Telegram: вибір чату + гарна картка від бота (inline-режим)
+    if (inTg && tg.isVersionAtLeast('6.7')) {
+      try {
+        tg.switchInlineQuery(pct >= 1 ? `${plate} ${Plates.formatPercent(pct)}` : plate, ['users', 'groups', 'channels']);
+        return;
+      } catch (e) { /* inline-режим вимкнено — нижче запасний варіант */ }
+    }
+    // 2) Запасний варіант: звичайне повідомлення з посиланням
+    const text = `🚗 ${plate} — ${p.tier.name}, ${Plates.formatPrice(p.price).replace(/ /g, ' ')}! А який номер у тебе?`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(APP_LINK)}&text=${encodeURIComponent(text)}`;
+    if (inTg) { tg.openTelegramLink(shareUrl); return; }
+    if (navigator.share) { navigator.share({ text, url: APP_LINK }).catch(() => {}); return; }
+    try {
+      navigator.clipboard.writeText(`${text} ${APP_LINK}`).then(() => toast('Скопійовано! Встав у чат 😉'), () => window.open(shareUrl, '_blank'));
+    } catch (e) { window.open(shareUrl, '_blank'); }
+  }
+  $('share-main').addEventListener('click', () => sharePlate(lastMainPlate));
+  $('share-check').addEventListener('click', () => sharePlate(lastCheckPlate));
+  $('share-sheet').addEventListener('click', () => sharePlate(sheetPlate));
 
   // ---------- Звук увімк./вимк. ----------
   const soundBtn = $('sound-btn');
