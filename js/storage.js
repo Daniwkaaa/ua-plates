@@ -17,6 +17,8 @@
   let entries = [];           // [{ key, t }]
   let stats = { spins: 0 };
   const dirty = new Set();    // номери шматків, які треба дописати в хмару
+  const stale = new Set();    // зайві шматки, які треба видалити з хмари
+  let cloudChunkCount = 0;
   let flushTimer = null;
 
   const enc = (e) => e.key + '.' + e.t.toString(36);
@@ -49,6 +51,7 @@
     if (!keys) return null;
     const chunkKeys = keys.filter(k => /^col_\d+$/.test(k))
       .sort((a, b) => parseInt(a.slice(4), 10) - parseInt(b.slice(4), 10));
+    cloudChunkCount = chunkKeys.length ? parseInt(chunkKeys[chunkKeys.length - 1].slice(4), 10) + 1 : 0;
     const want = chunkKeys.concat(keys.includes('stats') ? ['stats'] : []);
     if (!want.length) return { e: [], s: null };
     const vals = await cloudCall('getItems', want);
@@ -96,6 +99,12 @@
       const ok = await cloudCall('setItem', 'col_' + i, part);
       if (ok === null) dirty.add(i); // спробуємо пізніше
     }
+    if (stale.size) {
+      const keys = Array.from(stale).map(i => 'col_' + i);
+      stale.clear();
+      const ok = await cloudCall('removeItems', keys);
+      if (ok === null) keys.forEach(k => stale.add(parseInt(k.slice(4), 10)));
+    }
     await cloudCall('setItem', 'stats', JSON.stringify(stats));
   }
 
@@ -109,8 +118,24 @@
     return e;
   }
 
+  // Прибрати з колекції номери, які не проходять перевірку keep(key).
+  // Перезаписує колекцію і в браузері, і в хмарі Telegram. Повертає кількість прибраних.
+  function prune(keep) {
+    const before = entries.length;
+    entries = entries.filter(e => keep(e.key));
+    const removed = before - entries.length;
+    if (!removed) return 0;
+    const newChunks = Math.ceil(entries.length / PER_CHUNK);
+    const oldChunks = Math.max(Math.ceil(before / PER_CHUNK), cloudChunkCount);
+    for (let i = 0; i < newChunks; i++) dirty.add(i);
+    for (let i = newChunks; i < oldChunks; i++) stale.add(i);
+    writeLocal();
+    scheduleFlush();
+    return removed;
+  }
+
   global.Store = {
-    load, add,
+    load, add, prune,
     get entries() { return entries; },
     get stats() { return stats; },
     get usesCloud() { return !!cloud; },

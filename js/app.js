@@ -587,5 +587,15 @@
   buildFilters();
   renderOdds();
   updateStats();
-  Store.load().then(() => { evalCache.clear(); updateStats(); collectionDirty = true; renderCollection(); });
+  Store.load().then(() => {
+    // Прибираємо номери з кодами регіонів, яких більше немає в грі (серії 2021 року)
+    const removed = Store.prune((key) => !!Plates.REGIONS[key.slice(0, 2)]);
+    if (removed) {
+      const n10 = removed % 10, n100 = removed % 100;
+      const form = n10 === 1 && n100 !== 11 ? 'нереалістичний номер'
+        : n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14) ? 'нереалістичні номери' : 'нереалістичних номерів';
+      setTimeout(() => toast(`Колекцію оновлено: прибрано ${removed} ${form}`), 600);
+    }
+    evalCache.clear(); updateStats(); collectionDirty = true; renderCollection();
+  });
 })();
