@@ -9,9 +9,37 @@
   const LETTERS = ['А', 'В', 'Е', 'І', 'К', 'М', 'Н', 'О', 'Р', 'С', 'Т', 'Х'];
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
 
-  // Коди регіонів (базові серії 2013 року)
+  // Коди регіонів: серії 2004 і 2013 років + нові серії 2021 року (по 2 на регіон).
+  // КК у 2013 був кодом Криму, а з 2021 це також код Києва.
   const REGIONS = {
-    'АК': 'АР Крим',            'КК': 'АР Крим',
+    'АК': 'АР Крим',            'КК': 'м. Київ / АР Крим',
+    'ТК': 'АР Крим',            'МК': 'АР Крим',
+    'ІМ': 'Вінницька обл.',     'РІ': 'Вінницька обл.',
+    'СМ': 'Волинська обл.',     'ТС': 'Волинська обл.',
+    'РР': 'Дніпропетровська обл.', 'МІ': 'Дніпропетровська обл.',
+    'ТН': 'Донецька обл.',      'МН': 'Донецька обл.',
+    'ТМ': 'Житомирська обл.',   'МВ': 'Житомирська обл.',
+    'МТ': 'Закарпатська обл.',  'МО': 'Закарпатська обл.',
+    'ТР': 'Запорізька обл.',    'МР': 'Запорізька обл.',
+    'ТО': 'Івано-Франківська обл.', 'ХС': 'Івано-Франківська обл.',
+    'ТІ': 'Київська обл.',      'ЕЕ': 'Київська обл.',
+    'ТТ': 'м. Київ',
+    'ХА': 'Кіровоградська обл.', 'ЕА': 'Кіровоградська обл.',
+    'ЕР': 'Луганська обл.',     'ЕВ': 'Луганська обл.',
+    'СС': 'Львівська обл.',     'ЕС': 'Львівська обл.',
+    'ХЕ': 'Миколаївська обл.',  'ХН': 'Миколаївська обл.',
+    'ОО': 'Одеська обл.',       'ЕН': 'Одеська обл.',
+    'ХІ': 'Полтавська обл.',    'ЕІ': 'Полтавська обл.',
+    'ХК': 'Рівненська обл.',    'ЕК': 'Рівненська обл.',
+    'ХМ': 'Сумська обл.',       'ЕМ': 'Сумська обл.',
+    'ХО': 'Тернопільська обл.', 'ЕО': 'Тернопільська обл.',
+    'ХХ': 'Харківська обл.',    'ЕХ': 'Харківська обл.',
+    'ХТ': 'Херсонська обл.',    'ЕТ': 'Херсонська обл.',
+    'ОХ': 'Хмельницька обл.',   'РХ': 'Хмельницька обл.',
+    'ОА': 'Черкаська обл.',     'РА': 'Черкаська обл.',
+    'ОВ': 'Чернігівська обл.',  'РВ': 'Чернігівська обл.',
+    'ОЕ': 'Чернівецька обл.',   'РЕ': 'Чернівецька обл.',
+    'ОН': 'м. Севастополь',     'РН': 'м. Севастополь',
     'АВ': 'Вінницька обл.',     'КВ': 'Вінницька обл.',
     'АС': 'Волинська обл.',     'КС': 'Волинська обл.',
     'АЕ': 'Дніпропетровська обл.', 'КЕ': 'Дніпропетровська обл.',
@@ -219,9 +247,78 @@
   }
   const keyOf = (p) => p.prefix + p.digits + p.suffix;
 
+  // ---------- «Перевір свій номер» ----------
+
+  // Латиниця й малі літери → дозволені кириличні літери
+  const LATIN = { A: 'А', B: 'В', E: 'Е', I: 'І', K: 'К', M: 'М', H: 'Н', O: 'О', P: 'Р', C: 'С', T: 'Т', X: 'Х' };
+  function normalizeLetter(ch) {
+    const u = String(ch).toUpperCase();
+    if (LATIN[u]) return LATIN[u];
+    if (u === 'I' || u === 'Ї' || u === 'Й') return 'І';
+    return LETTERS.includes(u) ? u : null;
+  }
+
+  // «Кращий, ніж X% номерів»: порівнюємо з 60 000 рівномірно випадкових номерів.
+  // Генератор з фіксованим зерном, щоб відсоток для номера завжди був однаковий.
+  let sortedPrices = null;
+  function buildPercentiles() {
+    let s = 20240824;
+    const r = (n) => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return (((t ^ (t >>> 14)) >>> 0) / 4294967296 * n) | 0; };
+    const N = 60000;
+    const arr = new Float64Array(N);
+    for (let i = 0; i < N; i++) {
+      const p = { prefix: REGION_CODES[r(REGION_CODES.length)], digits: pad4(1 + r(9999)), suffix: LETTERS[r(12)] + LETTERS[r(12)] };
+      arr[i] = evaluate(p).price;
+    }
+    sortedPrices = arr.sort();
+  }
+  function percentile(price) {
+    if (!sortedPrices) buildPercentiles();
+    let lo = 0, hi = sortedPrices.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (sortedPrices[m] < price) lo = m + 1; else hi = m; }
+    return lo / sortedPrices.length * 100;
+  }
+
+  // Схожі, але дорожчі номери в тому ж регіоні
+  function similarBetter(plate, limit = 3) {
+    const { prefix, digits, suffix } = plate;
+    const mine = evaluate(plate).price;
+    const digitSet = new Set();
+    const uniq = [...new Set(digits.split(''))];
+    uniq.forEach(d => { if (d !== '0') digitSet.add(d.repeat(4)); });
+    const [a, b] = digits;
+    digitSet.add(a + b + b + a).add(a + a + b + b).add(a + b + a + b);
+    if (a !== '0') digitSet.add(a + '000');
+    if (digits[3] !== '0') digitSet.add('000' + digits[3]);
+    digitSet.add('0001');
+    const start = parseInt(a, 10);
+    if (start >= 1 && start <= 6) digitSet.add('0123456789'.substr(start, 4));
+    const letterSet = new Set([prefix, suffix[0] + suffix[0], prefix[1] + prefix[0]]);
+
+    const cands = [];
+    digitSet.forEach(d => { if (d !== '0000') cands.push({ prefix, digits: d, suffix }); });
+    letterSet.forEach(s => cands.push({ prefix, digits, suffix: s }));
+    digitSet.forEach(d => { if (d !== '0000') cands.push({ prefix, digits: d, suffix: prefix }); });
+
+    const seen = new Set([keyOf(plate)]);
+    const better = [];
+    for (const c of cands) {
+      const k = keyOf(c);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const ev = evaluate(c);
+      if (ev.price > mine) better.push(Object.assign(c, ev));
+    }
+    better.sort((x, y) => x.price - y.price);
+    if (better.length <= limit) return better;
+    // від найдоступнішого покращення до «номера мрії»
+    const pickIdx = [0, Math.floor((better.length - 1) / 2), better.length - 1];
+    return pickIdx.map(i => better[i]);
+  }
+
   global.Plates = {
     LETTERS, REGIONS, TIERS, TIER_BY_ID,
-    spin, evaluate, fromKey, keyOf,
+    spin, evaluate, fromKey, keyOf, normalizeLetter, percentile, similarBetter,
     regionName: (code) => REGIONS[code] || 'Україна',
     formatPrice: (n) => n.toLocaleString('uk-UA').replace(/,/g, ' ') + ' ₴',
   };

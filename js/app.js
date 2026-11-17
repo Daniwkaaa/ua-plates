@@ -33,20 +33,33 @@
       `<div class="plate-chars">${cells}</div><div class="shine"></div></div>`;
   }
 
-  // ---------- Головний номер з барабанами ----------
-  const plateChars = $('plate-chars');
+  // ---------- Номер з барабанами (головний екран і «Мій номер») ----------
+  function createReelPlate(container, initial) {
+    let current = initial.split('');
+    const reels = current.map((c, i) => {
+      const cell = document.createElement('span');
+      cell.className = 'cell reel' + (i < 2 || i > 5 ? ' L' : '') + (i === 2 || i === 6 ? ' gap' : '');
+      cell.dataset.i = i;
+      cell.innerHTML = `<div class="strip"><span>${c}</span></div>`;
+      container.appendChild(cell);
+      return cell;
+    });
+    // Показати символ без анімації (для вводу); null — порожнє місце
+    function setChar(i, ch) {
+      current[i] = ch || (i < 2 || i > 5 ? 'А' : '0');
+      reels[i].firstElementChild.innerHTML = ch ? `<span>${ch}</span>` : `<span class="ph">_</span>`;
+    }
+    function spin(target, suspense, onDigitsDone) {
+      return spinReels(reels, current, target, suspense, onDigitsDone).then(() => { current = target.split(''); });
+    }
+    return { reels, setChar, spin };
+  }
+
   const plateEl = $('plate');
   const wrap = $('plate-wrap');
-  let current = 'ХХ0000ХХ'.split('');
-  const reels = current.map((c, i) => {
-    const cell = document.createElement('span');
-    cell.className = 'cell reel' + (i < 2 || i > 5 ? ' L' : '') + (i === 2 || i === 6 ? ' gap' : '');
-    cell.innerHTML = `<div class="strip"><span>${c}</span></div>`;
-    plateChars.appendChild(cell);
-    return cell;
-  });
+  const mainPlate = createReelPlate($('plate-chars'), 'ХХ0000ХХ');
 
-  function spinReels(target, suspense, onDigitsDone) {
+  function spinReels(reels, current, target, suspense, onDigitsDone) {
     return new Promise((resolve) => {
       let landedCount = 0;
       reels.forEach((reel, i) => {
@@ -90,7 +103,6 @@
         const ac = new AbortController();
         strip.addEventListener('transitionend', (e) => { if (e.target === strip) { ac.abort(); finish(); } }, { signal: ac.signal });
       });
-      current = target.split('');
     });
   }
 
@@ -116,8 +128,8 @@
     })(start);
   }
 
-  function plateCenter() {
-    const r = plateEl.getBoundingClientRect();
+  function plateCenter(el = plateEl) {
+    const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
@@ -126,7 +138,6 @@
 
   function reveal(p) {
     const tier = p.tier;
-    Sound.win(tier.index);
     document.documentElement.style.setProperty('--tier', tier.color);
     wrap.className = 'plate-wrap revealed t-' + tier.id;
     plateEl.classList.remove('shining'); void plateEl.offsetWidth; plateEl.classList.add('shining');
@@ -142,8 +153,13 @@
       : `<span class="chip" style="animation-delay:.35s">Звичайна комбінація</span>`;
     result.classList.remove('show'); void result.offsetWidth; result.classList.add('show');
     countUp(priceEl, p.price, tier.index >= 4 ? 1800 : 900);
+    playTierFx(tier, plateEl);
+  }
 
-    const c = plateCenter();
+  // Ефекти, звук і вібрація для рідкості
+  function playTierFx(tier, el) {
+    Sound.win(tier.index);
+    const c = plateCenter(el);
     const col = tier.color;
     switch (tier.id) {
       case 'common':
@@ -174,7 +190,7 @@
         FX.burst({ ...c, colors, count: 80, power: 1.4 });
         FX.burst({ ...c, colors, count: 70, confetti: true, power: 1.6 });
         setTimeout(() => FX.rain({ colors, count: tier.id === 'mythic' ? 160 : 90 }), 250);
-        if (tier.id === 'mythic') setTimeout(() => FX.burst({ ...plateCenter(), colors, count: 90, confetti: true, power: 2 }), 900);
+        if (tier.id === 'mythic') setTimeout(() => FX.burst({ ...plateCenter(el), colors, count: 90, confetti: true, power: 2 }), 900);
         break;
       }
     }
@@ -187,7 +203,7 @@
     spinBtn.disabled = true;
     haptic.impact('medium');
     Sound.unlock();
-    Sound.startSpin(reels.length);
+    Sound.startSpin(8);
 
     const p = Plates.spin();
     const suspense = p.tier.index >= 3 || (p.tier.index === 2 && Math.random() < 0.25);
@@ -199,7 +215,7 @@
     hint.textContent = 'Крутимо…';
     document.documentElement.style.setProperty('--tier', '#9aa7b8');
 
-    await spinReels(Plates.keyOf(p), suspense, () => {
+    await mainPlate.spin(Plates.keyOf(p), suspense, () => {
       if (suspense) {
         wrap.classList.add('charging');
         hint.textContent = 'Щось особливе…';
@@ -362,6 +378,153 @@
     if (b.dataset.view === 'collection' && collectionDirty) renderCollection();
     window.scrollTo(0, 0);
   });
+
+  // ---------- Мій номер ----------
+  const checkPlateEl = $('check-plate');
+  const checkWrap = $('check-wrap');
+  const checkPlate = createReelPlate($('check-chars'), 'АА0000АА');
+  const kbd = $('kbd'), checkBtn = $('check-btn'), checkInput = $('check-input'), checkResult = $('check-result');
+  const checkLead = $('check-lead');
+  const LEAD_TEXT = checkLead.textContent;
+  const typed = Array(8).fill(null);
+  let cursor = 0, checkMode = 'input', checking = false;
+  const isLetterPos = (i) => i < 2 || i > 5;
+  for (let i = 0; i < 8; i++) checkPlate.setChar(i, null);
+
+  function renderKbd() {
+    const letters = isLetterPos(cursor);
+    const label = letters ? (cursor < 2 ? 'Код регіону' : 'Серія (літери)') : 'Цифри';
+    const keys = letters ? LETTERS : '1234567890'.split('');
+    kbd.className = 'kbd ' + (letters ? 'letters' : 'digits');
+    kbd.innerHTML = `<div class="kbd-label">${label}</div>` +
+      keys.map(k => `<button class="key" data-k="${k}" type="button">${k}</button>`).join('') +
+      `<button class="key wide" data-k="clear" type="button">Очистити</button>` +
+      `<button class="key wide" data-k="back" type="button">⌫ Стерти</button>`;
+  }
+  function updateCheck() {
+    checkBtn.disabled = !typed.every(Boolean);
+    const pre = typed[0] && typed[1] ? typed[0] + typed[1] : null;
+    $('check-region').textContent = pre ? '📍 ' + Plates.regionName(pre) : ' ';
+    checkPlate.reels.forEach((r, i) => r.classList.toggle('caret', checkMode === 'input' && i === cursor));
+    renderKbd();
+  }
+  function wrongKey() {
+    const r = checkPlate.reels[cursor];
+    r.classList.remove('bad'); void r.offsetWidth; r.classList.add('bad');
+    try { inTg && tg.HapticFeedback.notificationOccurred('error'); } catch (e) {}
+  }
+  function typeKey(k) {
+    if (checkMode !== 'input') return;
+    if (k === 'back') {
+      if (!typed[cursor] && cursor > 0) cursor--;
+      typed[cursor] = null; checkPlate.setChar(cursor, null);
+    } else if (k === 'clear') {
+      typed.fill(null);
+      for (let i = 0; i < 8; i++) checkPlate.setChar(i, null);
+      cursor = 0;
+    } else {
+      const ch = isLetterPos(cursor) ? Plates.normalizeLetter(k) : (/^\d$/.test(k) ? k : null);
+      if (!ch) { wrongKey(); return; }
+      typed[cursor] = ch; checkPlate.setChar(cursor, ch);
+      if (cursor < 7) cursor++;
+    }
+    haptic.tick();
+    Sound.unlock(); Sound.uiTick();
+    updateCheck();
+  }
+  kbd.addEventListener('click', (e) => { const b = e.target.closest('.key'); if (b) typeKey(b.dataset.k); });
+  $('check-chars').addEventListener('click', (e) => {
+    const c = e.target.closest('.cell'); if (!c || checkMode !== 'input') return;
+    cursor = +c.dataset.i; haptic.tick(); updateCheck();
+  });
+  // Фізична клавіатура (Telegram на комп'ютері)
+  document.addEventListener('keydown', (e) => {
+    if (!$('view-check').classList.contains('active') || checkMode !== 'input' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Backspace') { e.preventDefault(); typeKey('back'); }
+    else if (e.key === 'Enter') { e.preventDefault(); doCheck(); }
+    else if (e.key === 'ArrowLeft') { cursor = Math.max(0, cursor - 1); updateCheck(); }
+    else if (e.key === 'ArrowRight') { cursor = Math.min(7, cursor + 1); updateCheck(); }
+    else if (e.key.length === 1 && e.key !== ' ') { e.preventDefault(); typeKey(e.key); }
+  });
+
+  async function doCheck() {
+    if (checking || !typed.every(Boolean)) return;
+    checking = true;
+    checkMode = 'result';
+    const key = typed.join('');
+    const p = Plates.fromKey(key);
+    checkInput.classList.add('hidden');
+    checkResult.classList.remove('show');
+    checkWrap.className = 'plate-wrap';
+    checkLead.textContent = 'Перевіряємо твій номер…';
+    document.documentElement.style.setProperty('--tier', '#9aa7b8');
+    updateCheck();
+    haptic.impact('medium');
+    Sound.unlock(); Sound.startSpin(8);
+    const suspense = p.tier.index >= 3;
+    await checkPlate.spin(key, suspense, () => {
+      if (!suspense) return;
+      checkWrap.classList.add('charging');
+      checkLead.textContent = 'Ого, тут щось особливе…';
+      haptic.impact('rigid');
+      Sound.suspense();
+    });
+    Sound.stopSpin();
+    checkWrap.classList.remove('charging');
+    revealCheck(p);
+    checking = false;
+  }
+  checkBtn.addEventListener('click', doCheck);
+
+  function revealCheck(p) {
+    const tier = p.tier;
+    document.documentElement.style.setProperty('--tier', tier.color);
+    checkWrap.className = 'plate-wrap revealed t-' + tier.id;
+    checkPlateEl.classList.remove('shining'); void checkPlateEl.offsetWidth; checkPlateEl.classList.add('shining');
+    checkLead.textContent = ['Звичайний номер, зате твій 🙂', 'Непоганий номер!', 'Гарний номер!', 'Оце так номер! 😮',
+      'Це справжній скарб! 🔥', 'Легенда! Таких номерів одиниці 👑'][tier.index];
+
+    const badgeEl = $('check-badge');
+    badgeEl.textContent = tier.name;
+    badgeEl.className = 'tier-badge' + (tier.id === 'mythic' ? ' mythic' : '');
+    countUp($('check-price'), p.price, tier.index >= 4 ? 1800 : 900);
+
+    const pct = Plates.percentile(p.price);
+    $('check-pct').innerHTML = pct < 1
+      ? 'Таких номерів найбільше, і це нормально 😉'
+      : `Кращий, ніж <b>${pct >= 99 ? Math.min(pct, 99.99).toFixed(2).replace('.', ',') : Math.floor(pct)}%</b> номерів в Україні`;
+
+    $('check-features').innerHTML = p.features.length
+      ? p.features.map((f, i) => `<span class="chip" style="animation-delay:${0.35 + i * 0.08}s">${f.label}<b>+${f.pts}</b></span>`).join('')
+      : `<span class="chip" style="animation-delay:.35s">Звичайна комбінація</span>`;
+
+    const sim = Plates.similarBetter(p);
+    $('check-similar').innerHTML = sim.length
+      ? `<h3>Схожі, але дорожчі</h3><p>Ось як міг би виглядати твій номер у тому ж регіоні</p>` +
+        sim.map((s, i) =>
+          `<div class="sim" style="--tier:${s.tier.color};animation-delay:${0.6 + i * 0.12}s">${plateHTML(Plates.keyOf(s))}` +
+          `<div class="sim-meta"><span class="sim-tier">${s.tier.name}</span><span class="sim-price">${Plates.formatPrice(s.price)}</span>` +
+          `<span class="sim-diff">+${Plates.formatPrice(s.price - p.price)}</span></div></div>`).join('')
+      : `<h3>Кращого майже не буває 👑</h3><p>Твій номер уже на самій вершині.</p>`;
+
+    checkResult.classList.add('show');
+    playTierFx(tier, checkPlateEl);
+  }
+
+  $('check-again').addEventListener('click', () => {
+    checkMode = 'input';
+    checkResult.classList.remove('show');
+    checkInput.classList.remove('hidden');
+    checkWrap.className = 'plate-wrap';
+    checkLead.textContent = LEAD_TEXT;
+    rays.classList.remove('on');
+    document.documentElement.style.setProperty('--tier', '#9aa7b8');
+    cursor = 7;
+    haptic.tick(); Sound.uiTick();
+    updateCheck();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+  updateCheck();
 
   // ---------- Звук увімк./вимк. ----------
   const soundBtn = $('sound-btn');
