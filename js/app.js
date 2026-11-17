@@ -28,7 +28,7 @@
   // Статичний номер (для колекції, шансів, шторки)
   function plateHTML(key) {
     const cells = key.split('').map((c, i) =>
-      `<span class="cell${i === 2 || i === 6 ? ' gap' : ''}">${c}</span>`).join('');
+      `<span class="cell${i < 2 || i > 5 ? ' L' : ''}${i === 2 || i === 6 ? ' gap' : ''}">${c}</span>`).join('');
     return `<div class="plate"><div class="plate-flag"><span class="flag"></span><span class="ua">UA</span></div>` +
       `<div class="plate-chars">${cells}</div><div class="shine"></div></div>`;
   }
@@ -40,7 +40,7 @@
   let current = 'ХХ0000ХХ'.split('');
   const reels = current.map((c, i) => {
     const cell = document.createElement('span');
-    cell.className = 'cell reel' + (i === 2 || i === 6 ? ' gap' : '');
+    cell.className = 'cell reel' + (i < 2 || i > 5 ? ' L' : '') + (i === 2 || i === 6 ? ' gap' : '');
     cell.innerHTML = `<div class="strip"><span>${c}</span></div>`;
     plateChars.appendChild(cell);
     return cell;
@@ -68,16 +68,27 @@
         reel.classList.add('blur');
         setTimeout(() => reel.classList.remove('blur'), dur * 650);
 
-        strip.addEventListener('transitionend', () => {
+        // Зупинка барабана: по закінченню анімації або по таймеру
+        // (якщо вкладка прихована, браузер може не завершити анімацію)
+        let finished = false;
+        const finish = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(fallback);
+          ac.abort();
           strip.style.transition = 'none';
           strip.style.transform = 'none';
           strip.innerHTML = `<span>${target[i]}</span>`;
           reel.classList.add('landed');
           haptic.tick();
           landedCount++;
+          Sound.land(landedCount === reels.length);
           if (i === 5 && onDigitsDone) onDigitsDone();
           if (landedCount === reels.length) resolve();
-        }, { once: true });
+        };
+        const fallback = setTimeout(finish, dur * 1000 + 120);
+        const ac = new AbortController();
+        strip.addEventListener('transitionend', (e) => { if (e.target === strip) { ac.abort(); finish(); } }, { signal: ac.signal });
       });
       current = target.split('');
     });
@@ -115,6 +126,7 @@
 
   function reveal(p) {
     const tier = p.tier;
+    Sound.win(tier.index);
     document.documentElement.style.setProperty('--tier', tier.color);
     wrap.className = 'plate-wrap revealed t-' + tier.id;
     plateEl.classList.remove('shining'); void plateEl.offsetWidth; plateEl.classList.add('shining');
@@ -174,6 +186,8 @@
     spinning = true;
     spinBtn.disabled = true;
     haptic.impact('medium');
+    Sound.unlock();
+    Sound.startSpin(reels.length);
 
     const p = Plates.spin();
     const suspense = p.tier.index >= 3 || (p.tier.index === 2 && Math.random() < 0.25);
@@ -191,8 +205,10 @@
         hint.textContent = 'Щось особливе…';
         hint.classList.add('suspense');
         haptic.impact('rigid');
+        Sound.suspense();
       }
     });
+    Sound.stopSpin();
     wrap.classList.remove('charging');
 
     Store.add(Plates.keyOf(p));
@@ -339,12 +355,27 @@
   document.querySelector('.tabbar').addEventListener('click', (e) => {
     const b = e.target.closest('.tab'); if (!b || b.classList.contains('active')) return;
     haptic.tick();
+    Sound.uiTick();
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === b));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + b.dataset.view));
     rays.classList.remove('on');
     if (b.dataset.view === 'collection' && collectionDirty) renderCollection();
     window.scrollTo(0, 0);
   });
+
+  // ---------- Звук увімк./вимк. ----------
+  const soundBtn = $('sound-btn');
+  const renderSoundBtn = () => {
+    soundBtn.classList.toggle('off', !Sound.enabled);
+    soundBtn.setAttribute('aria-label', Sound.enabled ? 'Вимкнути звук' : 'Увімкнути звук');
+  };
+  soundBtn.addEventListener('click', () => {
+    Sound.setEnabled(!Sound.enabled);
+    renderSoundBtn();
+    haptic.tick();
+    Sound.uiTick();
+  });
+  renderSoundBtn();
 
   // ---------- Старт ----------
   buildFilters();

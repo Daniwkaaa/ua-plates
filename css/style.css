@@ -80,6 +80,19 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 h1 { margin: 6px 0 0; font-size: 28px; line-height: 1.08; font-weight: 800; letter-spacing: -.02em; }
+.top-right { display: flex; align-items: stretch; gap: 8px; }
+.sound-btn {
+  width: 48px; border-radius: 16px; display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: transform .15s, color .2s;
+}
+.sound-btn:active { transform: scale(.92); }
+.sound-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sound-btn .mute { display: none; }
+.sound-btn.off { color: var(--muted); }
+.sound-btn.off .wave { display: none; }
+.sound-btn.off .mute { display: inline; }
 .stat-pill {
   display: flex; flex-direction: column; align-items: flex-end;
   padding: 10px 14px; border-radius: 16px;
@@ -127,9 +140,12 @@ h1 { margin: 6px 0 0; font-size: 28px; line-height: 1.08; font-weight: 800; lett
   padding-right: calc(var(--ph) * .08);
 }
 /* Висота рядка 1.3em: великі літери будь-якого шрифту стоять по центру і не обрізаються */
-.cell { display: inline-block; width: .54em; text-align: center; line-height: 1.3em; height: 1.3em; }
+.cell { display: inline-block; width: .52em; text-align: center; line-height: 1.3em; height: 1.3em; }
+.cell.L { width: .76em; }            /* літери ширші за цифри (М, Н, О) */
 .cell.gap { margin-left: .24em; }
-.reel { height: 1.3em; overflow: hidden; position: relative; }
+/* обрізаємо лише зверху і знизу, щоб широкі літери не різало з боків */
+.reel { height: 1.3em; position: relative; overflow: visible; clip-path: inset(0 -0.4em); }
+.strip span { white-space: nowrap; }
 .strip { display: flex; flex-direction: column; will-change: transform; }
 .strip span { height: 1.3em; line-height: 1.3em; display: block; }
 .reel.landed { animation: thunk .28s ease-out; }
